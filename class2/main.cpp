@@ -26,21 +26,21 @@ int main(int argc, char **argv) {
      createTrackbar("H_high", "hsv", &H_high, 255);
      createTrackbar("S_high", "hsv", &S_high, 255);
      createTrackbar("V_high", "hsv", &V_high, 255);
-	
+     
+     if (argc == 1) {
+          a = 320;
+          b = 200;
+     } else if (argc == 2) {
+          a = atoi(argv[1]);
+          b = a;
+     } else if(argc == 3) {
+          a = atoi(argv[1]);
+          b = atoi(argv[2]);
+     } else {
+          cout<<"Wow too many numbers!";
+     }
+     
 	while (true) {
-          
-          if (argc == 1) {
-               a = 320;
-               b = 200;
-          } else if (argc == 2) {
-               a = atoi(argv[1]);
-               b = a;
-          } else if(argc == 3) {
-               a = atoi(argv[1]);
-               b = atoi(argv[2]);
-          } else {
-               cout<<"Wow too many numbers!";
-          }
           
 		Mat f1, gaussian, hsv;
           
