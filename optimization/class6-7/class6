@@ -1,0 +1,169 @@
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <map>
+#include <random>
+#include <cmath>
+#include <numeric>
+#include <algorithm>
+#include <functional>
+
+using namespace std;
+
+class CalculateFunction{
+    public:
+        virtual double calculate(vector<double> x) = 0;
+};
+
+class Sphere : public CalculateFunction {
+    public:
+        Sphere() {}
+        double calculate(vector<double> x) {
+            double sum = 0;
+            for (auto e : x)
+            {
+                sum += e * e;
+            }
+            return sum;
+        };
+};
+
+class Himmelblau : public CalculateFunction {
+    public:
+        Himmelblau() {}
+        double calculate(vector<double> d) {
+            double x = d.at(0);
+            double y = d.at(1);
+            return pow(x * x + y - 11, 2.0) + pow(x + y * y - 7, 2);
+        };
+};
+
+class ThreeHumpCamel : public CalculateFunction {
+    public:
+        ThreeHumpCamel() {}
+        double calculate(vector<double> d) {
+            double x = d.at(0);
+            double y = d.at(1);
+            return 2*x*x - 1.05*pow(x, 4.0) + pow(x, 6.0)/6 + x*y + y*y;
+        };
+};
+
+class Optimalization {
+    public:
+        int low;
+        int high;
+        int max_iterations;
+
+        Optimalization(int low, int high, int iterations) {
+            this->low = low;
+            this->high = high;
+            this->max_iterations = iterations;
+        }
+
+        /// f(x)    x należy do R^n
+        vector<vector<double>> neighbours(vector<double> x, double dx = 0.001) {
+            vector<vector<double>> ret;
+            for (int i = 0; i < x.size(); i++)
+            {
+                auto nx = x;
+                nx[i] += dx;
+                ret.push_back(nx);
+                nx[i] -= 2.0 * dx;
+                ret.push_back(nx);
+            }
+            return ret;
+        };
+        
+        vector<double> init() {
+            random_device r;
+            default_random_engine e1(r());
+            uniform_real_distribution<double> uniform_dist(low, high);
+            vector<double> x(2);
+            x[0] = uniform_dist(e1);
+            x[1] = uniform_dist(e1);
+            return x;
+        };
+
+        // minimalizacja
+        vector<double> hill_climbing_alg (std::function<double(vector<double>)> f) {
+            auto current_solution = init();
+            for (int iteration = 0; iteration < max_iterations; iteration++)
+            {
+                auto next_solutions = neighbours(current_solution);
+                next_solutions.push_back(current_solution);
+                current_solution = *(max_element(next_solutions.begin(), next_solutions.end(), [&f](auto a, auto b) {
+                    return f(a) > f(b);
+                }));
+            }
+            return current_solution;
+        };
+
+        //minimalizacja
+        // vector<double> hill_climbing_r_alg (auto get_random_sol, auto get_all_neighbours, auto goal, int max_iterations) {
+        //     auto current_solution = get_random_sol();
+        //     for (int iteration = 0; iteration < max_iterations; iteration++)
+        //     {
+        //         auto next_solutions = get_all_neighbours(current_solution);
+        //         uniform_int_distribution<int> uniform_dist(0, next_solutions.size()-1);
+        //         auto next_sol = next_solutions.at(uniform_dist(e1));
+        //         if (goal(current_solution) > goal(next_sol)) {
+        //             current_solution = next_sol;
+        //         }
+        //     }
+        //     return current_solution;
+        // };
+        void show(std::function<double(vector<double>)> f, std::vector<double> goal) {
+            cout << "result: [ ";
+            for (auto e : goal)
+                cout << e << " ";
+            cout << "] -> " << f(goal) << endl;
+        }
+
+};
+
+int main(int argc, char *argv[])
+{
+    int i;
+    cout << "1. Sphere function;    "
+    "2. Himmelblau function;    "
+    "3. ThreeHumpCamel function." << endl;
+    cin >> i;
+    int max_iterations = 100000;
+
+    int a = -5;
+    int b = 5;
+
+    auto sphere = [](vector<double> x) {
+        double sum = 0;
+        for (auto e : x)
+        {
+            sum += e * e;
+        }
+        return sum;
+    };
+    auto himmelblau = [](vector<double> d) {
+        double x = d.at(0);
+        double y = d.at(1);
+        return pow(x * x + y - 11, 2.0) + pow(x + y * y - 7, 2);
+    };
+    auto threeHumpCamel = [](vector<double> d) {
+        double x = d.at(0);
+        double y = d.at(1);
+        return 2*x*x - 1.05*pow(x, 4.0) + pow(x, 6.0)/6 + x*y + y*y;
+    };
+    
+    if (i == 1) {
+        Optimalization f1(a, b, 100);
+        auto goal = f1.hill_climbing_alg(sphere);
+        f1.show(sphere, goal);
+    } else if(i == 2) {
+        Optimalization f2(a, b, 100000);
+        auto goal = f2.hill_climbing_alg(himmelblau);
+        f2.show(himmelblau, goal);
+    } else {
+        Optimalization f3(a, b, 100000);
+        auto goal = f3.hill_climbing_alg(threeHumpCamel);
+        f3.show(threeHumpCamel, goal);
+    }
+    return 0;
+}
