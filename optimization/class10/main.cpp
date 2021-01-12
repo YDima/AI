@@ -19,34 +19,47 @@ using namespace std;
 using big = unsigned long long int;
 
 random_device r;
+
 default_random_engine e1(r());
+
 std::mt19937 rand_gen(r());
 
+
+
 auto genetic_algorithm = [](
-        auto calculate_pop_fitness,
-        auto generate_init_pop,
+        auto calculate_population_fitness,
+        auto fitness,
+        auto generate_population,
+        auto generator,
         auto term_condition,
         auto selection,
         auto crossover,
         auto mutation,
+        auto goal,
+        double domain_max,
+        auto iterator,
+        auto convertGtoP,
         int elite_size = 0) {
     
-    auto population = generate_init_pop();
-    population = calculate_pop_fitness(population);
-    while (!term_condition(population)) 
+    auto population = generate_population(generator);
+
+    population = calculate_population_fitness(population, goal, domain_max, fitness);
+
+    while (!term_condition(population, iterator)) 
     {
-        auto parents = selection(population);
+        auto parents = selection(population, fitness, convertGtoP, domain_max, goal);
+        
         auto offspring = crossover(parents);
         offspring = mutation(offspring);
-        auto new_population = calculate_pop_fitness(offspring);
 
-        ssort(population.begin(), population.end(), [](auto a, auto b) { return a.fit > b.fit; });
+        auto new_population = calculate_population_fitness(offspring, goal, domain_max, fitness);
+
+        sort(population.begin(), population.end(), [](auto a, auto b) { return a.fit > b.fit; });
         for (int e = 0; e < elite_size; e++)
             new_population.push_back(population.at(e));
         sort(new_population.begin(), new_population.end(), [](auto a, auto b) { return a.fit > b.fit; });
-        cerr << new_population.at(0).fit << " vs " << new_population.back().fit << std::endl;
-        for (int i = 0; i < elite_size; i++)
-            new_population.pop_back();
+        // for (int i = 0; i < elite_size; i++)
+        //     new_population.pop_back();
         population = new_population;
     }
     return population;
@@ -58,12 +71,11 @@ auto term_condition_iterations = [](auto population, int &iterations_max) {
     double sum_fitness = accumulate(population.begin(), population.end(), 0.0, [](auto a, auto b) { return a + b.fit; });
 
     cout << " { " << ((double)sum_fitness / (double)population.size()) << " } ";
-
-    //        for (auto &e : population)
-    //        {
-    //            std::cout << " " << e.fit;
-    //        }
-    std::cout << std::endl;
+        //    for (auto &e : population)
+        //    {
+        //        cout << " " << e.fit;
+        //    }
+    cout << endl;
     iterations_max--;
     if (iterations_max > 0)
         return false;
@@ -74,6 +86,7 @@ auto term_condition_iterations = [](auto population, int &iterations_max) {
 struct phenotype {
     double x;
     double y;
+    double fit;
 
     phenotype() {
         this-> x = 0;
@@ -86,9 +99,27 @@ struct phenotype {
     }
 };
 
-vector<int> convertPtoG(phenotype p, double domain_max) {
+struct genotype {
+    vector<int> bin;
+    double fit;
 
-    vector<int> genotype;
+    genotype(int n = 0) {
+        bin.resize(n);
+        fit = -1;
+    }
+    void randomize() {
+        uniform_int_distribution<int> dist(0, 1);
+        for (auto &e : bin)
+        {
+            e = dist(rand_gen);
+        }
+        
+    }
+};
+
+genotype convertPtoG(phenotype p, double domain_max) {
+
+    genotype genotype;
     vector<int> binary(128);
 
     big x = ((p.x / pow(10,20)) + (0.185/2)) * (domain_max * 10.85);
@@ -108,18 +139,18 @@ vector<int> convertPtoG(phenotype p, double domain_max) {
 
     for (int i = 0; i < 128; i++)
     {
-        genotype.push_back(binary.at(i));
+        genotype.bin.push_back(binary.at(i));
     }
 
     return genotype;
 }
 
-phenotype convertGtoP(vector<int> g, double domain_max) {
+phenotype convertGtoP(genotype g, double domain_max) {
     phenotype p;
-    unsigned int const half = g.size() / 2;
+    unsigned int const half = g.bin.size() / 2;
 
-    vector<int> p_x(g.begin(), g.begin() + half);
-    vector<int> p_y(g.begin() + half, g.end());
+    vector<int> p_x(g.bin.rbegin(), g.bin.rbegin() + half);
+    vector<int> p_y(g.bin.rbegin() + half, g.bin.rend());
 
     for (int i = p_x.size() - 1; i >= 0; i--) {
         p.x += p_x.at(i) * pow(2, i);
@@ -160,6 +191,7 @@ auto print = [](vector<int> &c) {
 };
 
 int main() {
+
     auto himmelblau = [](double x, double y) {
         return pow(x * x + y - 11, 2.0) + pow(x + y * y - 7, 2);
     };
@@ -169,79 +201,97 @@ int main() {
     };
 
     auto generator = [](int size = 128) {
-        uniform_int_distribution<int> uniform_dist(0, 1);
-        vector<int> result;
-        for (int i = 0; i < size; i++)
-        {
-            result.push_back(uniform_dist(e1));
-        }
-
-        return result;
+        // uniform_int_distribution<int> uniform_dist(0, 1);
+        // vector<int> result;
+        // for (int i = 0; i < size; i++)
+        // {
+        //     result.push_back(uniform_dist(e1));
+        // }
+        genotype bin = genotype(size);
+        return bin;
         
     };
 
-    auto selection_tournament = [](vector<vector<int>> population, auto fitness, auto convertGtoP, double domain_max, auto goal) {
-        uniform_int_distribution<int> dist(0, population.size() - 1);
-        vector<int> c1 = population.at(dist(rand_gen));
-        vector<int> c2 = population.at(dist(rand_gen));
-        phenotype p;
-        p = convertGtoP(c1, domain_max);
-        double fitness1 = fitness(goal(p.x, p.y));
-        // cout << fitness1 << endl;
-        p = convertGtoP(c2, domain_max);
-        double fitness2 = fitness(goal(p.x, p.y));
-        // cout << fitness1 << endl;
-
-        return fitness1 > fitness2 ? c1 : c2;
-    };
-
-    auto crossover = [](vector<int> parent1, vector<int> parent_chrom2) {
-        uniform_int_distribution<> distrib(0, 127);
-
-        int break_point = distrib(rand_gen);
-
-        for (int i = 0; i < break_point; i++)
+    auto selection_tournament = [](vector<genotype> population, auto fitness, auto convertGtoP, double domain_max, auto goal) {
+        vector<genotype> population1;
+        for (int i = 0; i < population1.size(); i++)
         {
-            swap(parent1.at(i), parent_chrom2.at(i));
+            uniform_int_distribution<int> dist(0, population.size() - 1);
+            genotype c1 = population.at(dist(rand_gen));
+            genotype c2 = population.at(dist(rand_gen));
+            phenotype p;
+            p = convertGtoP(c1, domain_max);
+            double fitness1 = fitness(goal(p.x, p.y));
+            // cout << fitness1 << endl;
+            p = convertGtoP(c2, domain_max);
+            double fitness2 = fitness(goal(p.x, p.y));
+            // cout << fitness1 << endl;
+
+            auto c = fitness1 > fitness2 ? c1 : c2;
+            population1.push_back(c);
         }
-
-        vector<vector<int>> descendants;
-
-        descendants.push_back(parent1);
-        descendants.push_back(parent_chrom2);
-
-        return descendants;
+        return population1;
     };
 
-    auto mutation = [](vector<int> chromosome) {
+    auto crossover = [](vector<genotype> parents) {
+        vector<genotype> population;
         uniform_int_distribution<> distrib(0, 127);
+        for (int i = 0; i < parents.size(); i+2)
+        {
+            genotype parent1 = parents.at(i); 
+            genotype parent2 = parents.at(i+1);
+            int point = distrib(rand_gen);
 
-        int gen_num = distrib(rand_gen);
+            for (int i = 0; i < point; i++)
+            {
+                swap(parent1.bin.at(i), parent2.bin.at(i));
+            }
 
-        chromosome.at(gen_num) = 1 - chromosome.at(gen_num);
+            vector<genotype> descendants;
 
-        return chromosome;
+            descendants.push_back(parent1);
+            descendants.push_back(parent2);
+            population = descendants;
+        }
+        return population;
+        
     };
 
-    auto calculate_population_fitness = [](vector<vector<int>> p, auto goal, double domain_max) {
-        vector<vector<int>> population;
-        for (int i = 0; i < 64; i++)
+    auto mutation = [](vector<genotype> population) {
+        for (int i = 0; i < population.size(); i++)
         {
-            phenotype p1;
-            vector<int> bin = p.at(i);
+            genotype chromosome = population.at(i);
+            uniform_int_distribution<> distrib(0, 127);
+
+            int gen_num = distrib(rand_gen);
+
+            chromosome.bin.at(gen_num) = 1 - chromosome.bin.at(gen_num);
+
+            population.push_back(chromosome);
+        }
+        return population;
+    };
+
+    auto calculate_population_fitness = [](vector<genotype> p, auto goal, double domain_max, auto fitness) {
+        vector<genotype> population;
+        phenotype p1;
+        genotype bin;
+        for (int i = 0; i < p.size(); i++)
+        {
+            bin = p.at(i);
             p1 = convertGtoP(bin, domain_max);
-            p1 = fitness(goal(p1.x, p1.y));
-            bin = convertPtoG(p1, domain_max)
+            bin.fit = fitness(goal(p1.x, p1.y));
+            // bin = convertPtoG(p1, domain_max);
             population.push_back(bin);
         }
         return population;
     };
     
     auto population_init = [](auto generator) {
-        vector<vector<int>> population;
+        vector<genotype> population;
         for (int i = 0; i < 64; i++)
         {
-            vector<int> bin = generator();
+            genotype bin = generator();
             population.push_back(bin);
         }
         return population;
@@ -249,15 +299,19 @@ int main() {
     
     int iterations = 100000;
     int elite = 3;
-    int iterator;
-    vector<vector<int>> population = population_init(generator);
-    auto selection = selection_tournament(population, fitness, convertGtoP, 5, himmelblau);
+    int iterator = 100;
     
-auto ret = genetic_algorithm(calculate_pop_fitness,
-                            population_init,
-                            get_term_condition_iterations(std::vector<specimen_t>(), iterator),
-                            selection,
-                            get_crossover_one_point(std::vector<specimen_t>(), 0.6),
-                            get_mutation_probabilitic(std::vector<specimen_t>(), 1.0 / 32.0),
-                            elite);
+    auto ret = genetic_algorithm(calculate_population_fitness,
+                                fitness,
+                                population_init,
+                                generator,
+                                term_condition_iterations,
+                                selection_tournament,
+                                crossover,
+                                mutation,
+                                himmelblau,
+                                5,
+                                iterator,
+                                convertGtoP,
+                                elite);
 }
